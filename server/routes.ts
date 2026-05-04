@@ -3,8 +3,18 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProductSchema, insertReceiptSchema } from "@shared/schema";
 import { z } from "zod";
+import {
+  differenceInCalendarDays,
+  endOfDay,
+  format,
+  startOfDay,
+  subDays,
+} from "date-fns";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Single-tenant: all routes use shared storage (no req.user). When adding
+  // multi-user mode, set SINGLE_USER_MODE in @shared/app-mode and add auth + filters here.
+
   // Product routes
   app.get("/api/products", async (req, res) => {
     try {
@@ -130,124 +140,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analytics route
+  // Analytics route — optional query: period=daily|weekly|monthly|custom, from=YYYY-MM-DD, to=YYYY-MM-DD
   app.get("/api/analytics", async (req, res) => {
     try {
       const receipts = await storage.getReceipts();
       const now = new Date();
+      const period = (req.query.period as string) || "monthly";
 
-      // Calculate date ranges
-      const startOfToday = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
+      let rangeStart: Date;
+      let rangeEnd: Date;
+      let prevStart: Date;
+      let prevEnd: Date;
+      let comparisonLabel: string;
+
+      if (period === "daily") {
+        rangeStart = startOfDay(now);
+        rangeEnd = endOfDay(now);
+        prevStart = startOfDay(subDays(now, 1));
+        prevEnd = endOfDay(subDays(now, 1));
+        comparisonLabel = "vs. yesterday";
+      } else if (period === "weekly") {
+        const startOfThisWeek = new Date(now);
+        startOfThisWeek.setDate(now.getDate() - now.getDay());
+        startOfThisWeek.setHours(0, 0, 0, 0);
+        const startOfLastWeek = new Date(startOfThisWeek);
+        startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+        rangeStart = startOfThisWeek;
+        rangeEnd = now;
+        prevStart = startOfLastWeek;
+        prevEnd = new Date(startOfThisWeek.getTime() - 1);
+        comparisonLabel = "vs. last week";
+      } else if (period === "monthly") {
+        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        rangeEnd = now;
+        prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        prevEnd = endOfDay(
+          new Date(now.getFullYear(), now.getMonth(), 0)
+        );
+        comparisonLabel = "vs. last month";
+      } else if (period === "custom") {
+        const fromQ = req.query.from as string | undefined;
+        const toQ = req.query.to as string | undefined;
+        if (!fromQ || !toQ) {
+          return res.status(400).json({
+            error:
+              "Custom period requires from and to query params (YYYY-MM-DD)",
+          });
+        }
+        rangeStart = new Date(`${fromQ}T00:00:00`);
+        rangeEnd = new Date(`${toQ}T23:59:59.999`);
+        if (rangeStart > rangeEnd) {
+          return res
+            .status(400)
+            .json({ error: "from date must be on or before to date" });
+        }
+        const nDays =
+          differenceInCalendarDays(
+            endOfDay(rangeEnd),
+            startOfDay(rangeStart)
+          ) + 1;
+        prevEnd = endOfDay(subDays(startOfDay(rangeStart), 1));
+        prevStart = startOfDay(subDays(prevEnd, nDays - 1));
+        comparisonLabel = "vs. previous period";
+      } else {
+        return res.status(400).json({
+          error: "Invalid period. Use daily, weekly, monthly, or custom",
+        });
+      }
+
+      const receiptTime = (r: (typeof receipts)[0]) =>
+        new Date(r.date).getTime();
+
+      const inRange = (t: number, a: Date, b: Date) =>
+        t >= a.getTime() && t <= b.getTime();
+
+      const currentReceipts = receipts.filter((r) =>
+        inRange(receiptTime(r), rangeStart, rangeEnd)
       );
-      const startOfYesterday = new Date(startOfToday);
-      startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-
-      const startOfThisWeek = new Date(now);
-      startOfThisWeek.setDate(now.getDate() - now.getDay());
-      startOfThisWeek.setHours(0, 0, 0, 0);
-
-      const startOfLastWeek = new Date(startOfThisWeek);
-      startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
-
-      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfLastMonth = new Date(
-        now.getFullYear(),
-        now.getMonth() - 1,
-        1
+      const prevReceipts = receipts.filter((r) =>
+        inRange(receiptTime(r), prevStart, prevEnd)
       );
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-      // Calculate daily income
-      const todayReceipts = receipts.filter(
-        (r) => new Date(r.date) >= startOfToday
+      const sumTotals = (list: typeof receipts) =>
+        list.reduce((sum, r) => sum + parseFloat(r.total), 0);
+
+      const currentIncome = sumTotals(currentReceipts);
+      const prevIncome = sumTotals(prevReceipts);
+      const pctChange =
+        prevIncome > 0
+          ? ((currentIncome - prevIncome) / prevIncome) * 100
+          : currentIncome > 0
+            ? 100
+            : 0;
+
+      const cardInPeriod = currentReceipts.filter(
+        (r) => r.paymentMethod === "card"
       );
-      const yesterdayReceipts = receipts.filter((r) => {
-        const date = new Date(r.date);
-        return date >= startOfYesterday && date < startOfToday;
-      });
-
-      const dailyIncome = todayReceipts.reduce(
+      const cashInPeriod = currentReceipts.filter(
+        (r) => r.paymentMethod === "cash"
+      );
+      const cardTotal = cardInPeriod.reduce(
         (sum, r) => sum + parseFloat(r.total),
         0
       );
-      const yesterdayIncome = yesterdayReceipts.reduce(
-        (sum, r) => sum + parseFloat(r.total),
-        0
-      );
-      const dailyChange =
-        yesterdayIncome > 0
-          ? ((dailyIncome - yesterdayIncome) / yesterdayIncome) * 100
-          : dailyIncome > 0
-          ? 100
-          : 0;
-
-      // Calculate weekly income
-      const thisWeekReceipts = receipts.filter(
-        (r) => new Date(r.date) >= startOfThisWeek
-      );
-      const lastWeekReceipts = receipts.filter((r) => {
-        const date = new Date(r.date);
-        return date >= startOfLastWeek && date < startOfThisWeek;
-      });
-
-      const weeklyIncome = thisWeekReceipts.reduce(
-        (sum, r) => sum + parseFloat(r.total),
-        0
-      );
-      const lastWeekIncome = lastWeekReceipts.reduce(
-        (sum, r) => sum + parseFloat(r.total),
-        0
-      );
-      const weeklyChange =
-        lastWeekIncome > 0
-          ? ((weeklyIncome - lastWeekIncome) / lastWeekIncome) * 100
-          : weeklyIncome > 0
-          ? 100
-          : 0;
-
-      // Calculate monthly income
-      const thisMonthReceipts = receipts.filter(
-        (r) => new Date(r.date) >= startOfThisMonth
-      );
-      const lastMonthReceipts = receipts.filter((r) => {
-        const date = new Date(r.date);
-        return date >= startOfLastMonth && date <= endOfLastMonth;
-      });
-
-      const monthlyIncome = thisMonthReceipts.reduce(
-        (sum, r) => sum + parseFloat(r.total),
-        0
-      );
-      const lastMonthIncome = lastMonthReceipts.reduce(
-        (sum, r) => sum + parseFloat(r.total),
-        0
-      );
-      const monthlyChange =
-        lastMonthIncome > 0
-          ? ((monthlyIncome - lastMonthIncome) / lastMonthIncome) * 100
-          : monthlyIncome > 0
-          ? 100
-          : 0;
-
-      // Calculate payment method distribution
-      const cardReceipts = receipts.filter((r) => r.paymentMethod === "card");
-      const cashReceipts = receipts.filter((r) => r.paymentMethod === "cash");
-
-      const cardTotal = cardReceipts.reduce(
-        (sum, r) => sum + parseFloat(r.total),
-        0
-      );
-      const cashTotal = cashReceipts.reduce(
+      const cashTotal = cashInPeriod.reduce(
         (sum, r) => sum + parseFloat(r.total),
         0
       );
       const totalIncome = cardTotal + cashTotal;
 
-      // Get recent receipts
-      const recentReceipts = receipts.slice(0, 5).map((r) => ({
+      const sortedCurrent = [...currentReceipts].sort(
+        (a, b) => receiptTime(b) - receiptTime(a)
+      );
+      const recentReceipts = sortedCurrent.slice(0, 5).map((r) => ({
         id: r.id,
         number: r.receiptNumber,
         amount: parseFloat(r.total),
@@ -255,12 +260,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         date: r.date,
       }));
 
-      // Calculate top products
       const productSales: {
         [key: string]: { count: number; revenue: number; name: string };
       } = {};
 
-      for (const receipt of receipts) {
+      for (const receipt of currentReceipts) {
         const items = JSON.parse(receipt.items);
         for (const item of items) {
           if (!productSales[item.productId]) {
@@ -284,19 +288,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           revenue: p.revenue,
         }));
 
+      const sameCalendarDay =
+        startOfDay(rangeStart).getTime() === startOfDay(rangeEnd).getTime();
+      const rangeLabel = sameCalendarDay
+        ? format(rangeEnd, "MMM d, yyyy")
+        : `${format(rangeStart, "MMM d, yyyy")} – ${format(rangeEnd, "MMM d, yyyy")}`;
+
       res.json({
-        daily: {
-          income: dailyIncome,
-          change: Math.round(dailyChange * 10) / 10,
+        period,
+        range: {
+          from: rangeStart.toISOString(),
+          to: rangeEnd.toISOString(),
         },
-        weekly: {
-          income: weeklyIncome,
-          change: Math.round(weeklyChange * 10) / 10,
+        rangeLabel,
+        summary: {
+          income: currentIncome,
+          change: Math.round(pctChange * 10) / 10,
+          receiptCount: currentReceipts.length,
         },
-        monthly: {
-          income: monthlyIncome,
-          change: Math.round(monthlyChange * 10) / 10,
-        },
+        comparisonLabel,
         paymentMethods: {
           card: {
             total: cardTotal,

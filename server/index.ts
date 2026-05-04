@@ -2,8 +2,36 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { SINGLE_USER_MODE } from "@shared/app-mode";
 
 const app = express();
+
+// -----------------------------------------------------------------------------
+// Multi-user / admin (not used while SINGLE_USER_MODE is true)
+// Uncomment and finish when you need accounts, roles, or /admin APIs.
+// -----------------------------------------------------------------------------
+// import session from "express-session";
+// import connectPgSimple from "connect-pg-simple";
+// import passport from "passport";
+// import { Strategy as LocalStrategy } from "passport-local";
+//
+// const PgSession = connectPgSimple(session);
+// app.use(
+//   session({
+//     store: new PgSession({ conString: process.env.DATABASE_URL, createTableIfMissing: true }),
+//     secret: process.env.SESSION_SECRET!,
+//     resave: false,
+//     saveUninitialized: false,
+//     cookie: { secure: process.env.NODE_ENV === "production", httpOnly: true, maxAge: 7 * 24 * 3600 * 1000 },
+//   }),
+// );
+// app.use(passport.initialize());
+// app.use(passport.session());
+// passport.use(new LocalStrategy(async (username, password, done) => { ... }));
+// app.post("/api/login", passport.authenticate("local"), (req, res) => { ... });
+// app.post("/api/logout", (req, res, next) => { req.logout((e) => next(e)); ... });
+// app.get("/api/admin/...", requireAdmin, ...);
+// -----------------------------------------------------------------------------
 
 declare module "http" {
   interface IncomingMessage {
@@ -51,6 +79,10 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  if (SINGLE_USER_MODE) {
+    log("single-user mode: no login, roles, or /admin routes");
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

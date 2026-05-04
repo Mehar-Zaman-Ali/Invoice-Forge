@@ -19,6 +19,8 @@ function Router() {
       <Route path="/generate" component={GenerateReceipt} />
       <Route path="/history" component={ReceiptHistory} />
       <Route path="/products" component={Products} />
+      {/* Future (multi-user): <Route path="/login" component={Login} /> */}
+      {/* Future (admin): <Route path="/admin" component={Admin} /> */}
       <Route component={NotFound} />
     </Switch>
   );

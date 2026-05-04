@@ -6,9 +6,10 @@ interface AnalyticsCardProps {
   value: string;
   change?: number;
   period: string;
+  receiptCount?: number;
 }
 
-export function AnalyticsCard({ title, value, change, period }: AnalyticsCardProps) {
+export function AnalyticsCard({ title, value, change, period, receiptCount }: AnalyticsCardProps) {
   const isPositive = change !== undefined && change >= 0;
 
   return (
@@ -27,6 +28,9 @@ export function AnalyticsCard({ title, value, change, period }: AnalyticsCardPro
       <CardContent>
         <div className="text-3xl font-mono font-semibold">€{value}</div>
         <p className="text-xs text-muted-foreground mt-1">{period}</p>
+        {receiptCount !== undefined && (
+          <p className="text-xs text-muted-foreground mt-0.5">{receiptCount} receipt{receiptCount === 1 ? "" : "s"} in range</p>
+        )}
       </CardContent>
     </Card>
   );

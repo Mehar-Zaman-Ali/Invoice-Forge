@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { SINGLE_USER_MODE } from "@shared/app-mode";
 
 const menuItems = [
   {
@@ -61,9 +62,14 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4">
-        <SidebarMenuButton asChild>
-        </SidebarMenuButton>
+      <SidebarFooter className="border-t p-4">
+        {SINGLE_USER_MODE ? (
+          <p className="text-xs leading-relaxed text-muted-foreground px-1">
+            Single workspace — one operator, no sign-in. Admin and multi-user
+            features are not enabled.
+          </p>
+        ) : null}
+        {/* Future (multi-user): user menu, logout, link to /admin for admins */}
       </SidebarFooter>
     </Sidebar>
   );
