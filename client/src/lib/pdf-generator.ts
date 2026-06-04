@@ -19,7 +19,6 @@ export interface ReceiptData {
 
 /**
  * Generates a clean, modern receipt PDF and triggers download.
- * - Safe if logo is missing.
  */
 export function generateReceiptPDF(data: ReceiptData): void {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -30,26 +29,16 @@ export function generateReceiptPDF(data: ReceiptData): void {
   const grey: [number, number, number] = [120, 120, 120];
   const lightGrey: [number, number, number] = [240, 240, 240];
 
-  // Optional: try to load a logo at /logo.png (public)
-  const logoImg = new Image();
-  logoImg.src = "/logo.png"; // keep this as public logo, but generator still works without it
-
-  const safeFinalize = (withLogo = false) => {
+  const safeFinalize = () => {
     // --- Header (left)
-    // --- Header with spacing under logo
-    const headerStartY = withLogo ? 38 : 20;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(...primary);
-    doc.text("MR IPHONE PHIBSBOROUGH", 20, headerStartY);
+    const headerStartY = 20;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...grey);
-    doc.text("ALL Mobile Phone & Computer Service 54", 20, headerStartY + 6);
-    doc.text("Phibsborough Road, Dublin 7", 20, headerStartY + 11);
-    doc.text("M: 0894444944  |  T: 015553236", 20, headerStartY + 16);
+    doc.text("ALL Mobile Phone & Computer Service 54", 20, headerStartY);
+    doc.text("Phibsborough Road, Dublin 7", 20, headerStartY + 5);
+    doc.text("M: 0894444944  |  T: 015553236", 20, headerStartY + 10);
 
     // Right: INVOICE, number, date
     doc.setFont("helvetica", "bold");
@@ -69,31 +58,8 @@ export function generateReceiptPDF(data: ReceiptData): void {
       { align: "right" }
     );
 
-    // If logo available and drawn, it should be at top-right. We only do it if withLogo true.
-    // NEW: Logo on top-left above business details
-    if (withLogo) {
-      try {
-        const imgWidth = 25; // mm
-        const imgHeight = 25;
-        const leftX = 20;
-        const topY = 8;
-        doc.addImage(
-          logoImg,
-          "PNG",
-          leftX,
-          topY,
-          imgWidth,
-          imgHeight,
-          undefined,
-          "FAST"
-        );
-      } catch (e) {
-        // ignore if logo fails
-      }
-    }
-
     // Separator (positioned below business text)
-    const separatorY = headerStartY + 22; // adds space after business text
+    const separatorY = headerStartY + 15;
     doc.setDrawColor(...lightGrey);
     doc.setLineWidth(0.5);
     doc.line(20, separatorY, pageWidth - 20, separatorY);
@@ -220,29 +186,6 @@ export function generateReceiptPDF(data: ReceiptData): void {
     doc.text("Thank you!", 20, y);
   };
 
-  // If logo loads successfully, finalize with logo. If fails or times out, finalize without it.
-  logoImg.onload = () => {
-    try {
-      safeFinalize(true);
-    } catch {
-      safeFinalize(false);
-    }
-    doc.save(`receipt-${data.receiptNumber}.pdf`);
-  };
-
-  // if logo can't load or no network, fallback
-  logoImg.onerror = () => {
-    safeFinalize(false);
-    doc.save(`receipt-${data.receiptNumber}.pdf`);
-  };
-
-  // If image already cached/complete, trigger onload immediately
-  if (logoImg.complete) {
-    // force call to onload or onerror depending on naturalWidth
-    if ((logoImg as any).naturalWidth && (logoImg as any).naturalWidth > 0) {
-      logoImg.onload?.(new Event("load"));
-    } else {
-      logoImg.onerror?.(new Event("error"));
-    }
-  }
+  safeFinalize();
+  doc.save(`receipt-${data.receiptNumber}.pdf`);
 }

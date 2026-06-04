@@ -185,7 +185,6 @@ export default function ReceiptHistory() {
         </head>
         <body>
           <div class="header">
-            <h1>MR IPHONE PHIBSBOROUGH</h1>
             <p>ALL Mobile Phone & Computer Service 54</p>
             <p>Phibsborough Road, Dublin 7</p>
             <p>M: 0894444944 | T: 015553236</p>
