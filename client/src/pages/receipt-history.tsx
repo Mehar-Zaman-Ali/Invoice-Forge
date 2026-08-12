@@ -222,7 +222,11 @@ export default function ReceiptHistory() {
                 .map(
                   (item) => `
                 <tr>
-                  <td>${item.productName}</td>
+                  <td>${item.productName}${
+                    item.productDescription
+                      ? `<br><span style="font-size:10px;color:#666;">${item.productDescription}</span>`
+                      : ""
+                  }</td>
                   <td class="text-right">${item.quantity}</td>
                   <td class="text-right">€${item.price.toFixed(2)}</td>
                   <td class="text-right">€${item.subtotal.toFixed(2)}</td>

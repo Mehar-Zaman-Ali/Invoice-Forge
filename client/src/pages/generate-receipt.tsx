@@ -94,6 +94,7 @@ export default function GenerateReceipt() {
         {
           productId,
           productName: product.name,
+          productDescription: product.description,
           quantity,
           price,
           subtotal: price * quantity,
