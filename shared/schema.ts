@@ -50,6 +50,7 @@ export type Receipt = typeof receipts.$inferSelect;
 export interface ReceiptItem {
   productId: string;
   productName: string;
+  productDescription?: string | null;
   quantity: number;
   price: number;
   subtotal: number;

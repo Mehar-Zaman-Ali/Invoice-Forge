@@ -72,7 +72,14 @@ export function ReceiptPrintView({
             <tbody>
               {items.map((item, index) => (
                 <tr key={index} className="border-b">
-                  <td className="py-2">{item.productName}</td>
+                  <td className="py-2">
+                    {item.productName}
+                    {item.productDescription && (
+                      <div className="text-xs text-muted-foreground">
+                        {item.productDescription}
+                      </div>
+                    )}
+                  </td>
                   <td className="text-right py-2">{item.quantity}</td>
                   <td className="text-right py-2">€{item.price.toFixed(2)}</td>
                   <td className="text-right py-2">

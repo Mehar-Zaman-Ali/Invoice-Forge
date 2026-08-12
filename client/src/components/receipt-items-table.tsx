@@ -12,6 +12,7 @@ import {
 interface ReceiptItem {
   productId: string;
   productName: string;
+  productDescription?: string | null;
   quantity: number;
   price: number;
   subtotal: number;
@@ -46,7 +47,14 @@ export function ReceiptItemsTable({ items, onRemoveItem }: ReceiptItemsTableProp
         <TableBody>
           {items.map((item, index) => (
             <TableRow key={index}>
-              <TableCell className="font-medium">{item.productName}</TableCell>
+              <TableCell className="font-medium">
+                {item.productName}
+                {item.productDescription && (
+                  <div className="text-xs text-muted-foreground font-normal">
+                    {item.productDescription}
+                  </div>
+                )}
+              </TableCell>
               <TableCell className="text-right font-mono">{item.quantity}</TableCell>
               <TableCell className="text-right font-mono">€{item.price.toFixed(2)}</TableCell>
               <TableCell className="text-right font-mono">€{item.subtotal.toFixed(2)}</TableCell>

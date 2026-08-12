@@ -88,9 +88,12 @@ export function generateReceiptPDF(data: ReceiptData): void {
         y = 20; // simple page break logic
       }
 
+      const description = item.productDescription?.trim();
+      const rowHeight = description ? 12 : 8;
+
       if (idx % 2 === 0) {
         doc.setFillColor(250, 250, 250);
-        doc.rect(20, y - 6, pageWidth - 40, 8, "F");
+        doc.rect(20, y - 6, pageWidth - 40, rowHeight, "F");
       }
 
       const name = item.productName || "Unknown";
@@ -99,11 +102,23 @@ export function generateReceiptPDF(data: ReceiptData): void {
         item.subtotal || item.price * item.quantity || 0
       ).toFixed(2);
 
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(...primary);
       doc.text(name, 24, y);
       doc.text(`€${price}`, pageWidth - 70, y);
       doc.text(`€${amount}`, pageWidth - 24, y, { align: "right" });
 
-      y += 8;
+      if (description) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(...grey);
+        doc.text(description, 24, y + 4.5);
+        doc.setFontSize(10);
+        doc.setTextColor(...primary);
+      }
+
+      y += rowHeight;
     });
 
     // Totals
